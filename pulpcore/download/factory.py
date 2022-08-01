@@ -54,7 +54,7 @@ class DownloaderFactory:
     to session continuation implementation in various servers.
     """
 
-    def __init__(self, remote, downloader_overrides=None):
+    def __init__(self, remote, downloader_overrides=None, remote_config=None):
         """
         Args:
             remote (:class:`~pulpcore.plugin.models.Remote`): The remote used to populate
