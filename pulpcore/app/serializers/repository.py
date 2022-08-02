@@ -69,6 +69,198 @@ class RepositorySerializer(ModelSerializer):
             "remote",
         )
 
+class RemoteConfigSerializer(ModelSerializer):
+    """
+    Every remote defined by a plugin should have a Remote serializer that inherits from this
+    class. Please import from `pulpcore.plugin.serializers` rather than from this module directly.
+    """
+
+    pulp_href = DetailIdentityField(view_name_pattern=r"remote-config(-.*/.*)-detail")
+    pulp_labels = LabelsField(required=False)
+    name = serializers.CharField(
+        help_text=_("A unique name for this remote config."),
+        validators=[UniqueValidator(queryset=models.RemoteConfig.objects.all())],
+    )
+    ca_cert = serializers.CharField(
+        help_text="A PEM encoded CA certificate used to validate the server "
+        "certificate presented by the remote server.",
+        required=False,
+        allow_null=True,
+    )
+    client_cert = serializers.CharField(
+        help_text="A PEM encoded client certificate used for authentication.",
+        required=False,
+        allow_null=True,
+    )
+    client_key = serializers.CharField(
+        help_text="A PEM encoded private key used for authentication.",
+        required=False,
+        allow_null=True,
+        write_only=True,
+    )
+    proxy_url = serializers.CharField(
+        help_text="The proxy URL. Format: scheme://host:port",
+        required=False,
+        allow_null=True,
+    )
+    proxy_username = serializers.CharField(
+        help_text="The username to authenticte to the proxy.",
+        required=False,
+        allow_null=True,
+        write_only=True,
+    )
+    proxy_password = serializers.CharField(
+        help_text=_(
+            "The password to authenticate to the proxy. Extra leading and trailing whitespace "
+            "characters are not trimmed."
+        ),
+        required=False,
+        allow_null=True,
+        write_only=True,
+        trim_whitespace=False,
+        style={"input_type": "password"},
+    )
+    username = serializers.CharField(
+        help_text="The username to be used for authentication when syncing.",
+        required=False,
+        allow_null=True,
+        write_only=True,
+    )
+    password = serializers.CharField(
+        help_text=_(
+            "The password to be used for authentication when syncing. Extra leading and trailing "
+            "whitespace characters are not trimmed."
+        ),
+        required=False,
+        allow_null=True,
+        write_only=True,
+        trim_whitespace=False,
+        style={"input_type": "password"},
+    )
+    pulp_last_updated = serializers.DateTimeField(
+        help_text="Timestamp of the most recent update of the remote.", read_only=True
+    )
+    download_concurrency = serializers.IntegerField(
+        help_text=(
+            "Total number of simultaneous connections. If not set then the default "
+            "value will be used."
+        ),
+        allow_null=True,
+        required=False,
+        min_value=1,
+    )
+    max_retries = serializers.IntegerField(
+        help_text=(
+            "Maximum number of retry attempts after a download failure. If not set then the "
+            "default value (3) will be used."
+        ),
+        required=False,
+        allow_null=True,
+    )
+    total_timeout = serializers.FloatField(
+        allow_null=True,
+        required=False,
+        help_text=(
+            "aiohttp.ClientTimeout.total (q.v.) for download-connections. The default is null, "
+            "which will cause the default from the aiohttp library to be used."
+        ),
+        min_value=0.0,
+    )
+    connect_timeout = serializers.FloatField(
+        allow_null=True,
+        required=False,
+        help_text=(
+            "aiohttp.ClientTimeout.connect (q.v.) for download-connections. The default is null, "
+            "which will cause the default from the aiohttp library to be used."
+        ),
+        min_value=0.0,
+    )
+    sock_connect_timeout = serializers.FloatField(
+        allow_null=True,
+        required=False,
+        help_text=(
+            "aiohttp.ClientTimeout.sock_connect (q.v.) for download-connections. The default is "
+            "null, which will cause the default from the aiohttp library to be used."
+        ),
+        min_value=0.0,
+    )
+    sock_read_timeout = serializers.FloatField(
+        allow_null=True,
+        required=False,
+        help_text=(
+            "aiohttp.ClientTimeout.sock_read (q.v.) for download-connections. The default is "
+            "null, which will cause the default from the aiohttp library to be used."
+        ),
+        min_value=0.0,
+    )
+    headers = serializers.ListField(
+        child=serializers.DictField(),
+        help_text=_("Headers for aiohttp.Clientsession"),
+        required=False,
+    )
+    rate_limit = serializers.IntegerField(
+        help_text=_("Limits requests per second for each concurrent downloader"),
+        allow_null=True,
+        required=False,
+    )
+    def validate_proxy_url(self, value):
+        """
+        Check, that the proxy_url does not contain credentials.
+        """
+        if value and "@" in value:
+            raise serializers.ValidationError(_("proxy_url must not contain credentials"))
+        return value
+
+    def validate(self, data):
+        """
+        Check, that proxy credentials are only provided completely and if a proxy is configured.
+        """
+        data = super().validate(data)
+
+        proxy_url = self.instance.proxy_url if self.partial else None
+        proxy_url = data.get("proxy_url", proxy_url)
+        proxy_username = self.instance.proxy_username if self.partial else None
+        proxy_username = data.get("proxy_username", proxy_username)
+        proxy_password = self.instance.proxy_password if self.partial else None
+        proxy_password = data.get("proxy_password", proxy_password)
+
+        if (proxy_username or proxy_password) and not proxy_url:
+            raise serializers.ValidationError(
+                _("proxy credentials cannot be specified without a proxy")
+            )
+
+        if bool(proxy_username) is not bool(proxy_password):
+            raise serializers.ValidationError(
+                _("proxy username and password can only be specified together")
+            )
+
+        return data
+
+    class Meta:
+        abstract = True
+        model = models.RemoteConfig
+        fields = ModelSerializer.Meta.fields + (
+            "name",
+            "ca_cert",
+            "client_cert",
+            "client_key",
+            "proxy_url",
+            "proxy_username",
+            "proxy_password",
+            "username",
+            "password",
+            "pulp_labels",
+            "pulp_last_updated",
+            "download_concurrency",
+            "max_retries",
+            "total_timeout",
+            "connect_timeout",
+            "sock_connect_timeout",
+            "sock_read_timeout",
+            "headers",
+            "rate_limit",
+        )
+
 
 class RemoteSerializer(ModelSerializer):
     """
@@ -214,6 +406,14 @@ class RemoteSerializer(ModelSerializer):
         allow_null=True,
         required=False,
     )
+    remote_config = DetailRelatedField(
+        help_text=_("An optional remote config to use by default when syncing."),
+        view_name_pattern=r"remote-config(-.*/.*)-detail",
+        queryset=models.RemoteConfig.objects.all(),
+        required=False,
+        allow_null=True,
+    )
+
 
     def validate_url(self, url):
         """
@@ -318,6 +518,7 @@ class RemoteSerializer(ModelSerializer):
             "sock_read_timeout",
             "headers",
             "rate_limit",
+            "remote_config",
         )
 
 

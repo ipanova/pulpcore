@@ -77,6 +77,7 @@ from .publication import (  # noqa
 from .purge import PurgeSerializer  # noqa
 from .repository import (  # noqa
     RemoteSerializer,
+    RemoteConfigSerializer,
     RepositorySerializer,
     RepositorySyncURLSerializer,
     RepositoryAddRemoveContentSerializer,

@@ -266,29 +266,22 @@ class Repository(MasterModel):
 
 class RemoteConfig(MasterModel):
     """
-    A remote source for content.
+    A shared remote config.
 
     This is meant to be subclassed by plugin authors as an opportunity to provide plugin-specific
-    persistent data attributes for a plugin remote subclass.
+    persistent data attributes for a plugin remote config subclass.
 
-    This object is a Django model that inherits from :class: `pulpcore.app.models.Remote` which
-    provides the platform persistent attributes for a remote object. Plugin authors can add
-    additional persistent remote data by subclassing this object and adding Django fields. We
-    defer to the Django docs on extending this model definition with additional fields.
-
-    Validation of the remote is done at the API level by a plugin defined subclass of
-    :class: `pulpcore.plugin.serializers.repository.RemoteSerializer`.
+    Validation of the remote config is done at the API level by a plugin defined subclass of
+    :class: `pulpcore.plugin.serializers.repository.RemoteConfigSerializer`.
 
     Fields:
 
-        name (models.TextField): The remote name.
-        url (models.TextField): The URL of an external content source.
+        name (models.TextField): The remote config name.
         ca_cert (models.TextField): A PEM encoded CA certificate used to validate the
             server certificate presented by the external source.
         client_cert (models.TextField): A PEM encoded client certificate used
             for authentication.
         client_key (models.TextField): A PEM encoded private key used for authentication.
-        tls_validation (models.BooleanField): If True, TLS peer validation must be performed.
         proxy_url (models.TextField): The optional proxy URL.
             Format: scheme://host:port
         proxy_username (models.TextField): The optional username to authenticate with the proxy.
@@ -297,7 +290,6 @@ class RemoteConfig(MasterModel):
         password (models.TextField): The password to be used for authentication when syncing.
         download_concurrency (models.PositiveIntegerField): Total number of
             simultaneous connections allowed to any remote during a sync.
-        policy (models.TextField): The policy to use when downloading content.
         total_timeout (models.FloatField): Value for aiohttp.ClientTimeout.total on connections
         connect_timeout (models.FloatField): Value for aiohttp.ClientTimeout.connect
         sock_connect_timeout (models.FloatField): Value for aiohttp.ClientTimeout.sock_connect
@@ -307,38 +299,11 @@ class RemoteConfig(MasterModel):
     """
     TYPE = "remote_config"
 
-    # Constants for the ChoiceField 'policy'
-    IMMEDIATE = "immediate"
-    ON_DEMAND = "on_demand"
-    STREAMED = "streamed"
-
-    DEFAULT_DOWNLOAD_CONCURRENCY = 10
-    DEFAULT_MAX_RETRIES = 3
-
-    POLICY_CHOICES = (
-        (IMMEDIATE, "When syncing, download all metadata and content now."),
-        (
-            ON_DEMAND,
-            "When syncing, download metadata, but do not download content now. Instead, "
-            "download content as clients request it, and save it in Pulp to be served for "
-            "future client requests.",
-        ),
-        (
-            STREAMED,
-            "When syncing, download metadata, but do not download content now. Instead,"
-            "download content as clients request it, but never save it in Pulp. This causes "
-            "future requests for that same content to have to be downloaded again.",
-        ),
-    )
-
     name = models.TextField(db_index=True, unique=True)
-
-    # url = models.TextField()
 
     ca_cert = models.TextField(null=True)
     client_cert = models.TextField(null=True)
     client_key = EncryptedTextField(null=True)
-    tls_validation = models.BooleanField(default=True)
 
     username = EncryptedTextField(null=True)
     password = EncryptedTextField(null=True)
@@ -351,7 +316,6 @@ class RemoteConfig(MasterModel):
         null=True, validators=[MinValueValidator(1, "Download concurrency must be at least 1")]
     )
     max_retries = models.PositiveIntegerField(null=True)
-    policy = models.TextField(choices=POLICY_CHOICES, default=IMMEDIATE)
     total_timeout = models.FloatField(
         null=True, validators=[MinValueValidator(0.0, "Timeout must be >= 0")]
     )
@@ -494,7 +458,6 @@ class Remote(MasterModel):
         try:
             return self._download_factory
         except AttributeError:
-            # merge RemoteConfig settings
             self._download_factory = DownloaderFactory(self, remote_config=remote_config)
             return self._download_factory
 
@@ -514,7 +477,10 @@ class Remote(MasterModel):
         try:
             return self._download_throttler
         except AttributeError:
-            rate_limit = self.remote_config.rate_limit or self.rate_limit
+            config_rate_limit = None
+            if self.remote_config:
+                config_rate_limit = self.remote_config.rate_limit
+            rate_limit = self.rate_limit or config_rate_limit
             if rate_limit:
                 self._download_throttler = Throttler(rate_limit=rate_limit)
                 return self._download_throttler

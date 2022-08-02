@@ -58,6 +58,7 @@ from .publication import (  # noqa
 
 from .repository import (  # noqa
     Remote,
+    RemoteConfig,
     Repository,
     RepositoryContent,
     RepositoryVersion,

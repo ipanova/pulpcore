@@ -1,4 +1,7 @@
 from aiohttp import __version__ as aiohttp_version
+from types import SimpleNamespace
+
+
 import asyncio
 import atexit
 import copy
@@ -62,10 +65,13 @@ class DownloaderFactory:
             downloader_overrides (dict): Keyed on a scheme name, e.g. 'https' or 'ftp' and the value
                 is the downloader class to be used for that scheme, e.g.
                 {'https': MyCustomDownloader}. These override the default values.
+            remote_config (:class:`~pulpcore.plugin.models.RemoteConfig`): The shared remote config 
+                used to populate downloader settings.
         """
-        download_concurrency = remote.download_concurrency or remote.DEFAULT_DOWNLOAD_CONCURRENCY
+        download_concurrency = remote.download_concurrency or remote_config.download_concurrency or remote.DEFAULT_DOWNLOAD_CONCURRENCY
+        merged = self._merge_settings(remote, remote_config)
 
-        self._remote = remote
+        self._remote = merged
         self._download_class_map = copy.copy(PROTOCOL_MAP)
         if downloader_overrides:
             for protocol, download_class in downloader_overrides.items():  # overlay the overrides
@@ -78,6 +84,33 @@ class DownloaderFactory:
         self._session = self._make_aiohttp_session_from_remote()
         self._semaphore = asyncio.Semaphore(value=download_concurrency)
         atexit.register(self._session_cleanup)
+
+    def _merge_settings(remote, remote_config):
+        merged  = SimpleNamespace(
+            DEFAULT_DOWNLOAD_CONCURRENCY=remote.DEFAULT_DOWNLOAD_CONCURRENCY,
+            DEFAULT_MAX_RETRIES=remote.DEFAULT_MAX_RETRIES,
+            url=remote.url,
+            policy=remote.policy,
+            tls_validation=remote.tls_validation,
+            ca_cert=remote.ca_cert or remote_config.ca_cert if remote_config else None,
+            client_cert=remote.client_cert or remote_config.client_cert if remote_config else None,
+            client_key=remote.client_key or remote_config.client_key if remote_config else None,
+            username=remote.username or remote_config.username if remote_config else None,
+            password=remote.password or remote_config.password if remote_config else None,
+            proxy_url=remote.proxy_url or remote_config.proxy_url if remote_config else None,
+            proxy_username=remote.proxy_username or remote_config.proxy_username if remote_config else None,
+            proxy_password=remote.proxy_password or remote_config.proxy_password if remote_config else None,
+            download_concurrency=remote.proxy_password or remote_config.proxy_password if remote_config else None,
+            max_retries=remote.proxy_password or remote_config.proxy_password if remote_config else None,
+            total_timeout=remote.total_timeout or remote_config.total_timeout if remote_config else None,
+            connect_timeout=remote.connect_timeout or remote_config.connect_timeout if remote_config else None,
+            sock_connect_timeout=remote.sock_connect_timeout or remote_config.sock_connect_timeout if remote_config else None,
+            sock_read_timeout=remote.sock_read_timeout or remote_config.sock_read_timeout if remote_config else None,
+            headers=remote.headers or remote_config.headers if remote_config else None,
+            rate_limit=remote.rate_limit or remote_config.rate_limit if remote_config else None,
+            download_throttler=remote.download_throttler,
+        )
+        return merged
 
     @staticmethod
     def user_agent():

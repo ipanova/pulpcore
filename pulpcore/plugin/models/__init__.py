@@ -32,6 +32,7 @@ from pulpcore.app.models import (  # noqa
     PulpTemporaryFile,
     Repository,
     Remote,
+    RemoteConfig,
     RemoteArtifact,
     RepositoryContent,
     RepositoryVersion,

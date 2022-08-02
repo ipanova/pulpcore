@@ -11,6 +11,7 @@ from pulpcore.app import tasks
 from pulpcore.app.models import (
     Content,
     Remote,
+    RemoteConfig,
     Repository,
     RepositoryVersion,
 )
@@ -18,6 +19,7 @@ from pulpcore.app.response import OperationPostponedResponse
 from pulpcore.app.serializers import (
     AsyncOperationResponseSerializer,
     RemoteSerializer,
+    RemoteConfigSerializer,
     RepairSerializer,
     RepositorySerializer,
     RepositoryVersionSerializer,
@@ -210,6 +212,38 @@ class RepositoryVersionViewSet(
             args=[version.pk, verify_checksums],
         )
         return OperationPostponedResponse(task, request)
+
+class RemoteConfigFilter(BaseFilterSet):
+    """
+    Plugin remote filter should:
+     - inherit from this class
+     - add any specific filters if needed
+     - define a `Meta` class which should:
+       - specify a plugin remote model for which filter is defined
+       - extend `fields` with specific ones
+    """
+
+    name = filters.CharFilter()
+    pulp_label_select = LabelSelectFilter()
+    pulp_last_updated = IsoDateTimeFilter()
+
+    class Meta:
+        model = RemoteConfig
+        fields = {"name": NAME_FILTER_OPTIONS, "pulp_last_updated": DATETIME_FILTER_OPTIONS}
+
+
+class RemoteConfigViewSet(
+    NamedModelViewSet,
+    mixins.CreateModelMixin,
+    mixins.RetrieveModelMixin,
+    mixins.ListModelMixin,
+    AsyncUpdateMixin,
+    AsyncRemoveMixin,
+):
+    endpoint_name = "remote-config"
+    serializer_class = RemoteConfigSerializer
+    queryset = RemoteConfig.objects.all()
+    filterset_class = RemoteConfigFilter
 
 
 class RemoteFilter(BaseFilterSet):
