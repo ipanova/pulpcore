@@ -7,7 +7,8 @@
 
 ---
 name: Pulpcore CI
-on: {pull_request: {branches: ['*']}}
+# on: {pull_request: {branches: ['*']}}
+on: {pull_request: {branches: ['*']}, push: {branches: ['*']}}
 jobs:
 
 
@@ -192,6 +193,10 @@ jobs:
           GITHUB_REPO_SLUG: ${{ github.repository }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_CONTEXT: ${{ github.event.pull_request.commits_url }}
+
+      - name: Setup tmate session
+        if: ${{ failure() }}
+        uses: mxschmitt/action-tmate@v3
 
       - name: Extract Deprecations from Logs
         id: deprecations
